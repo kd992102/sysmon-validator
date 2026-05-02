@@ -1,0 +1,14 @@
+{
+  "technique_id": "T1134.004",
+  "mitre_name": "Parent PID Spoofing",
+  "expected_event_ids": [1, 10],
+  "detected_event_ids": [1],
+  "passed": false,
+  "gap": [10],
+  "keywords": [
+    "T1134004_PID_SPOOF_TEST",
+    "GrantedAccess"
+  ],
+  "gap_reason": "Event 10（ProcessAccess）未被捕捉。sysmon-modular 預設的 ProcessAccess 規則僅監控高風險 access mask（如 0x1F0FFF、0x1410），未包含 PROCESS_CREATE_PROCESS (0x80)，導致本手法的 OpenProcess 呼叫不觸發 Event 10。",
+  "notes": "Event 1：子 cmd.exe 的 ParentImage / ParentProcessId 顯示偽造的父（explorer.exe），CommandLine 含 T1134004_PID_SPOOF_TEST，偵測成功。Event 10：需補充 sysmon-modular.xml 規則才能覆蓋。"
+}
