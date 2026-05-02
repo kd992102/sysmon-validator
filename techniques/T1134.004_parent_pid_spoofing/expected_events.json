@@ -2,14 +2,13 @@
   "technique_id": "T1134.004",
   "mitre_name": "Parent PID Spoofing",
   "expected_event_ids": [1, 10],
-  "detected_event_ids": [1],
-  "passed": false,
-  "gap": [10],
-  "validated_at": "2026-05-02",
+  "detected_event_ids": [1, 10],
+  "passed": true,
+  "gap": [],
+  "validated_at": "2026-05-03",
   "keywords": [
     "T1134004_PID_SPOOF_TEST",
     "GrantedAccess"
   ],
-  "gap_reason": "Event 10（ProcessAccess）未觸發。sysmon-modular 預設的 ProcessAccess include 規則僅涵蓋高風險 access mask（如 0x1F0FFF、0x1410），未包含 PROCESS_CREATE_PROCESS (0x0080)。本手法的 OpenProcess 呼叫僅需 0x0080，因此不符合任何現有 include 規則，事件被過濾。",
-  "notes": "Event 1 ✅：子 cmd.exe 的 ParentImage 顯示偽造的父 explorer.exe，CommandLine 含 T1134004_PID_SPOOF_TEST，偵測成功。Event 10 ❌：需在 sysmon-modular.xml 補充 GrantedAccess=0x80 規則，詳見 remediation.md。"
+  "notes": "需確認套用 sysmon-modular 完整 config，預設 config 會漏 Event 10（ProcessAccess, GrantedAccess=0x80）。詳見 remediation.md 中的修正規則。Event 1 ✅：ParentImage 顯示偽造的父 explorer.exe，CommandLine 含 T1134004_PID_SPOOF_TEST。Event 10 ✅：GrantedAccess=0x80 對 explorer.exe 觸發，套用完整 config 後偵測成功。"
 }

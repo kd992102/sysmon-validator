@@ -1,5 +1,8 @@
 # T1134.004 — Sysmon Config Remediation
 
+> **狀態：已套用並驗證（2026-05-03）**
+> 套用下方規則後，Event 10 已可正常觸發，T1134.004 全面通過。
+
 ## 問題
 
 `sysmon-modular` 預設的 `ProcessAccess`（Event 10）規則僅 include 已知高風險 access mask：
