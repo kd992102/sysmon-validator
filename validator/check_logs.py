@@ -70,7 +70,8 @@ def _render_xml(handle) -> str:
     size = buf_used.value
     if size == 0:
         return ""
-    buf = (ctypes.c_byte * size)()
+    # c_ubyte（0-255）而非 c_byte（-128~127）才能直接轉為 bytes
+    buf = (ctypes.c_ubyte * size)()
     # 第二次呼叫：實際渲染
     if not _wevtapi.EvtRender(None, raw, 1, size, buf,
                                ctypes.byref(buf_used), ctypes.byref(prop_count)):
@@ -183,14 +184,15 @@ def debug_recent_events(n: int = 3) -> None:
             try:
                 xml = _render_xml(h)
                 eid = extract_event_id(xml)
-                # 從 XML 取出 SystemTime 屬性值
-                marker = 'SystemTime="'
-                idx = xml.find(marker)
-                if idx != -1:
-                    idx += len(marker)
-                    system_time = xml[idx: xml.find('"', idx)]
-                else:
-                    system_time = "unknown"
+                # 從 XML 取出 SystemTime 屬性值（Windows 使用單引號或雙引號）
+                system_time = "unknown"
+                for q in ('"', "'"):
+                    marker = f"SystemTime={q}"
+                    idx = xml.find(marker)
+                    if idx != -1:
+                        idx += len(marker)
+                        system_time = xml[idx: xml.find(q, idx)]
+                        break
                 print(f"  [debug] #{count+1}  EventID={eid}  SystemTime={system_time}", file=sys.stderr)
                 count += 1
             except Exception as e:
