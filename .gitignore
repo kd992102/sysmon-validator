@@ -1,4 +1,32 @@
+# Claude Code session data
+.claude/
 
-node_modules/
-package-lock.json
-package.json
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# C# compiled output (techniques/*/technique_cs/)
+*.exe
+*.dll
+*.pdb
+*.obj
+
+# Report outputs
+reports/
+*.report.json
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Secrets / env
+.env
+*.env
