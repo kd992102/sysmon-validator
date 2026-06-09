@@ -25,10 +25,17 @@ def is_admin() -> bool:
         return False
 
 
+# check_logs.py validate() 的固定輸出欄位——缺任一個就不是 validator 結果
+_VALIDATOR_KEYS = {"technique_id", "expected_event_ids", "detected_event_ids", "passed", "gap"}
+
+
 def find_validator_result(stdout_bytes: bytes) -> dict | None:
     """
-    從 stdout 找出含有 'passed' 欄位的 JSON 物件（validator 輸出）。
-    technique.py 的執行結果含 'executed'，validator 結果含 'passed'，兩者不重疊。
+    從 stdout 掃描所有 JSON 物件，回傳符合 validator 指紋的最後一筆。
+
+    識別條件：同時含有 _VALIDATOR_KEYS 全部五個欄位。
+    單獨依賴 'passed' 容易誤命中 technique.py 自己輸出的 JSON；
+    五欄位組合是 check_logs.validate() 的唯一輸出，不會與其他輸出重疊。
     """
     text = stdout_bytes.decode("utf-8", errors="replace")
     decoder = json.JSONDecoder()
@@ -40,7 +47,7 @@ def find_validator_result(stdout_bytes: bytes) -> dict | None:
             break
         try:
             obj, end = decoder.raw_decode(text, pos)
-            if isinstance(obj, dict) and "passed" in obj:
+            if isinstance(obj, dict) and _VALIDATOR_KEYS.issubset(obj.keys()):
                 last_validator = obj
             idx = end
         except json.JSONDecodeError:
