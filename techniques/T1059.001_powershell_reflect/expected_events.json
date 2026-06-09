@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1059.001",
+  "mitre_name": "Command and Scripting Interpreter: PowerShell",
+  "expected_event_ids": [1],
+  "keywords": ["T1059001_REFLECT_TEST", "powershell"],
+  "notes": "Event 1：powershell.exe ProcessCreate，CommandLine 含 -Marker T1059001_REFLECT_TEST。validator 以 child_pid 精確比對 ProcessId 欄位。PowerShell 反射式載入（Assembly.Load）在記憶體中執行，不落地；Event 7（CLR DLL）與 Event 11（暫存 DLL）因 sysmon-modular 過濾而不列入 expected。"
+}
