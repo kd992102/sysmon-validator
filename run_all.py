@@ -10,8 +10,10 @@ run_all.py — 批次執行所有 technique 並收集驗測結果
 """
 
 import ctypes
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -23,6 +25,44 @@ def is_admin() -> bool:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         return False
+
+
+def get_sysmon_info(root: Path) -> dict:
+    """
+    收集 Sysmon 版本與 config 檔案 SHA-256，寫入 report.json 供結果追溯。
+
+    版本：從 sysmon64.exe -s 的 XML schema 解析 binaryversion 屬性。
+    Config hash：對 config/sysmon-modular.xml 計算 SHA-256 前 12 碼（短 hash）。
+    兩者任一取得失敗都靜默降級為 "unknown"，不中斷批次執行。
+    """
+    info: dict = {
+        "sysmon_version":      "unknown",
+        "config_file":         "unknown",
+        "config_sha256_short": "unknown",
+    }
+
+    # Sysmon 版本：解析 sysmon64.exe -s 輸出的 XML schema
+    try:
+        proc = subprocess.run(
+            ["sysmon64.exe", "-s"],
+            capture_output=True,
+            timeout=10,
+        )
+        output = (proc.stdout + proc.stderr).decode("utf-8", errors="replace")
+        m = re.search(r'binaryversion="([^"]+)"', output)
+        if m:
+            info["sysmon_version"] = f"v{m.group(1)}"
+    except Exception:
+        pass
+
+    # Config 檔案 hash：識別此次測試套用的是哪一版 sysmon-modular config
+    config_path = root / "config" / "sysmon-modular.xml"
+    if config_path.exists():
+        h = hashlib.sha256(config_path.read_bytes()).hexdigest()
+        info["config_file"]         = config_path.name
+        info["config_sha256_short"] = h[:12]
+
+    return info
 
 
 # check_logs.py validate() 的固定輸出欄位——缺任一個就不是 validator 結果
@@ -138,6 +178,11 @@ def main() -> None:
         print("[-] 找不到任何 technique（請確認 techniques/ 資料夾）", file=sys.stderr)
         sys.exit(1)
 
+    sysmon_info = get_sysmon_info(root)
+    print(
+        f"[*] Sysmon {sysmon_info['sysmon_version']}  "
+        f"config: {sysmon_info['config_file']} ({sysmon_info['config_sha256_short']})"
+    )
     print(f"[*] 找到 {len(technique_dirs)} 個 technique，開始執行...")
 
     results: list[dict] = []
@@ -149,10 +194,13 @@ def main() -> None:
     print_summary(results)
 
     report = {
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "total":   len(results),
-        "passed":  sum(1 for r in results if r.get("passed")),
-        "results": results,
+        "generated_at":        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "sysmon_version":      sysmon_info["sysmon_version"],
+        "config_file":         sysmon_info["config_file"],
+        "config_sha256_short": sysmon_info["config_sha256_short"],
+        "total":               len(results),
+        "passed":              sum(1 for r in results if r.get("passed")),
+        "results":             results,
     }
     report_path = root / "report.json"
     report_path.write_text(

@@ -96,7 +96,7 @@ _HTML = """\
 </head>
 <body>
   <h1>Sysmon 偵測覆蓋率報表</h1>
-  <p class="meta">產生時間：{generated_at}　｜　資料來源：{source_file}</p>
+  <p class="meta">產生時間：{generated_at}　｜　資料來源：{source_file}　｜　Sysmon {sysmon_version}　｜　Config: {config_file} <code>({config_sha256_short})</code></p>
 
   <div class="summary">
     <div class="card">
@@ -268,14 +268,21 @@ def main() -> None:
     failed = total - passed
     pct    = round(passed / total * 100) if total else 0
 
+    # 從 report.json 頂層讀取 sysmon / config 資訊（舊格式無此欄位則顯示 unknown）
+    meta = data if isinstance(data, dict) else {}
+
     html = _HTML.format(
-        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        source_file  = _html.escape(input_path.name),
-        total        = total,
-        passed       = passed,
-        failed       = failed,
-        pct          = pct,
-        rows         = "\n".join(_row(r) for r in results),
+        generated_at        = _html.escape(meta.get("generated_at",
+                                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))),
+        source_file         = _html.escape(input_path.name),
+        sysmon_version      = _html.escape(meta.get("sysmon_version",      "unknown")),
+        config_file         = _html.escape(meta.get("config_file",         "unknown")),
+        config_sha256_short = _html.escape(meta.get("config_sha256_short", "unknown")),
+        total               = total,
+        passed              = passed,
+        failed              = failed,
+        pct                 = pct,
+        rows                = "\n".join(_row(r) for r in results),
     )
 
     output_path.write_text(html, encoding="utf-8")
