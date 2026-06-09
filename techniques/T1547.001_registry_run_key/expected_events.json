@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1547.001",
+  "mitre_name": "Boot or Logon Autostart Execution: Registry Run Keys",
+  "expected_event_ids": [13],
+  "keywords": ["T1547001_PERSIST_TEST", "CurrentVersion\\Run"],
+  "notes": "Event 13 (RegistrySetValue)：寫入 HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\T1547001_PERSIST_TEST。validator 以 technique_pid 無法直接比對 Registry 事件（無 ProcessId 欄位對應），改以 keyword 比對 TargetObject 欄位中的 MARKER 字串。執行後值立即清除，測試環境不留持久化後門。"
+}

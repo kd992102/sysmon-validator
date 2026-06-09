@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1053.005",
+  "mitre_name": "Scheduled Task/Job: Scheduled Task",
+  "expected_event_ids": [1],
+  "keywords": ["T1053005_SCHTASK_TEST", "schtasks"],
+  "notes": "Event 1 (ProcessCreate)：schtasks.exe /create /tn T1053005_SCHTASK_TEST，CommandLine 含 MARKER。validator 以 child_pid 精確比對 /create 呼叫的 schtasks.exe ProcessId。/delete 步驟也會產生 Event 1，但 child_pid 指向 /create 的 PID，不影響精確性。"
+}

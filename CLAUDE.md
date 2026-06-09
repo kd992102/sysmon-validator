@@ -134,6 +134,8 @@ git commit -m "feat(T1234.001): add <technique name> technique and expected even
 2. T1055.012 — Process Hollowing ✅ PASS（完成，Event 10 + 25 均命中）
 3. T1218.011 — Rundll32（LOLBin）✅ PASS（完成，Event 1 命中）
 4. T1059.001 — PowerShell 反射式執行 ✅ PASS（完成，Event 1 命中）
+5. T1547.001 — Registry Run Key（Persistence，Event 13）
+6. T1053.005 — Scheduled Task（Persistence，Event 1）
 
 ---
 

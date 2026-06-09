@@ -245,6 +245,7 @@ _KEY_FIELDS: dict[int, list[str]] = {
          "TargetProcessId", "TargetImage", "StartAddress"],
     10: ["UtcTime", "SourceProcessId", "SourceImage",
          "TargetProcessId", "TargetImage", "GrantedAccess"],
+    13: ["UtcTime", "ProcessId", "Image", "TargetObject", "Details", "User"],
     25: ["UtcTime", "ProcessId", "Image", "Type", "User"],
 }
 
@@ -253,6 +254,7 @@ _FORENSIC_HIGHLIGHT: dict[int, set[str]] = {
     1:  {"ParentImage", "ParentProcessId"},
     8:  {"TargetImage", "StartAddress"},
     10: {"GrantedAccess", "TargetImage"},
+    13: {"TargetObject", "Details"},
     25: {"Image", "Type"},
 }
 
