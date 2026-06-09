@@ -95,17 +95,21 @@ def find_validator_result(stdout_bytes: bytes) -> dict | None:
     return last_validator
 
 
-def run_technique(technique_dir: Path) -> dict | None:
+def run_technique(technique_dir: Path, script: Path | None = None) -> dict | None:
     """
     執行單一 technique，回傳 validator 結果 dict。
+    script 預設為 technique_dir/technique.py；傳入 technique_evasion.py 則執行 evasion 變體。
     stderr 直接顯示（讓使用者看到即時進度），stdout 捕獲供 JSON 解析。
     """
-    script = technique_dir / "technique.py"
+    if script is None:
+        script = technique_dir / "technique.py"
     if not script.exists():
         return None
 
+    is_evasion = script.stem == "technique_evasion"
+    label = f"{technique_dir.name}" + (" [evasion]" if is_evasion else "")
     print(f"\n{'=' * 60}")
-    print(f"[*] {technique_dir.name}")
+    print(f"[*] {label}")
     print("=" * 60, flush=True)
 
     env = os.environ.copy()
@@ -136,8 +140,14 @@ def run_technique(technique_dir: Path) -> dict | None:
                 "expected_event_ids": [], "detected_event_ids": [], "gap": [],
                 "error": "no_validator_result"}
 
-    status = "PASS ✓" if result["passed"] else f"FAIL  gap={result['gap']}"
-    marker = "+" if result["passed"] else "-"
+    is_ev  = result.get("evasion_test", False)
+    passed = result["passed"]
+    if is_ev and not passed:
+        status, marker = f"EVADED ✓  gap={result['gap']}", "+"
+    elif passed:
+        status, marker = "PASS ✓", "+"
+    else:
+        status, marker = f"FAIL  gap={result['gap']}", "-"
     print(f"[{marker}] {status}")
     return result
 
@@ -153,9 +163,18 @@ def print_summary(results: list[dict]) -> None:
     print(f"  {'Technique':<38} 狀態")
     print(f"  {'-' * 56}")
     for r in results:
-        label  = f"{r.get('technique_id', '')} {r.get('technique_name', '')}".strip()
-        status = "PASS ✓" if r.get("passed") else f"FAIL  gap={r.get('gap', [])}"
-        print(f"  {label:<38} {status}")
+        tid    = r.get("technique_id", "")
+        name   = r.get("technique_name", "")
+        is_ev  = r.get("evasion_test", False)
+        suffix = " (evasion)" if is_ev else ""
+        label  = f"{tid} {name}{suffix}".strip()
+        if is_ev and not r.get("passed"):
+            status = f"EVADED ✓  gap={r.get('gap', [])}"
+        elif r.get("passed"):
+            status = "PASS ✓"
+        else:
+            status = f"FAIL  gap={r.get('gap', [])}"
+        print(f"  {label:<45} {status}")
     print(f"  {'-' * 56}")
     print(f"  總計：{passed}/{total} 通過")
     print("=" * 60)
@@ -169,12 +188,17 @@ def main() -> None:
     root           = Path(__file__).resolve().parent
     techniques_dir = root / "techniques"
 
-    technique_dirs = sorted(
-        d for d in techniques_dir.iterdir()
-        if d.is_dir() and (d / "technique.py").exists()
-    )
+    # 每個 technique 資料夾收集 technique.py（正常版）和 technique_evasion.py（規避變體）
+    scripts: list[tuple[Path, bool]] = []
+    for d in sorted(techniques_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        if (d / "technique.py").exists():
+            scripts.append((d / "technique.py", False))
+        if (d / "technique_evasion.py").exists():
+            scripts.append((d / "technique_evasion.py", True))
 
-    if not technique_dirs:
+    if not scripts:
         print("[-] 找不到任何 technique（請確認 techniques/ 資料夾）", file=sys.stderr)
         sys.exit(1)
 
@@ -183,11 +207,13 @@ def main() -> None:
         f"[*] Sysmon {sysmon_info['sysmon_version']}  "
         f"config: {sysmon_info['config_file']} ({sysmon_info['config_sha256_short']})"
     )
-    print(f"[*] 找到 {len(technique_dirs)} 個 technique，開始執行...")
+    n_normal  = sum(1 for _, ev in scripts if not ev)
+    n_evasion = sum(1 for _, ev in scripts if ev)
+    print(f"[*] 找到 {n_normal} 個 technique（含 {n_evasion} 個 evasion 變體），開始執行...")
 
     results: list[dict] = []
-    for td in technique_dirs:
-        r = run_technique(td)
+    for script_path, is_evasion in scripts:
+        r = run_technique(script_path.parent, script_path)
         if r is not None:
             results.append(r)
 

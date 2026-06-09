@@ -83,12 +83,20 @@ def _render_xml(handle) -> str:
 
 # ── 輔助函式 ──────────────────────────────────────────────────────────────────
 
-def load_expected(technique_id: str) -> dict:
-    """從對應 technique 資料夾讀取 expected_events.json"""
+def load_expected(technique_id: str, evasion: bool = False) -> dict:
+    """
+    從對應 technique 資料夾讀取 expected_events.json 或 expected_events_evasion.json。
+    evasion=True 時載入規避變體的預期定義，若該檔案不存在則 fallback 到標準版。
+    """
     matches = list(TECHNIQUES_DIR.glob(f"{technique_id}*"))
     if not matches:
         raise FileNotFoundError(f"找不到 technique 資料夾：{technique_id}")
-    json_path = matches[0] / "expected_events.json"
+    folder = matches[0]
+    if evasion:
+        evasion_path = folder / "expected_events_evasion.json"
+        if evasion_path.exists():
+            return json.loads(evasion_path.read_text(encoding="utf-8"))
+    json_path = folder / "expected_events.json"
     if not json_path.exists():
         raise FileNotFoundError(f"找不到 expected_events.json：{json_path}")
     return json.loads(json_path.read_text(encoding="utf-8"))
@@ -422,11 +430,13 @@ def main() -> None:
                         help="technique 本身的 PID，用於 Event 10 SourceProcessId 精確比對")
     parser.add_argument("--timestamp",     required=True,
                         help="technique 開始執行的時間（ISO 8601 UTC）")
+    parser.add_argument("--evasion",       action="store_true",
+                        help="載入 expected_events_evasion.json，測試規避變體")
     args = parser.parse_args()
 
-    # 載入 expected_events.json
+    # 載入 expected_events.json（或 evasion 變體）
     try:
-        expected = load_expected(args.technique)
+        expected = load_expected(args.technique, evasion=args.evasion)
     except FileNotFoundError as e:
         print(json.dumps({"error": str(e)}, ensure_ascii=False))
         sys.exit(1)
@@ -460,7 +470,8 @@ def main() -> None:
     )
 
     result = validate(expected, event_xmls, args.child_pid, args.technique_pid)
-    result["timestamp"] = args.timestamp
+    result["timestamp"]    = args.timestamp
+    result["evasion_test"] = args.evasion
     result.update(baseline)
 
     status = "PASS ✓" if result["passed"] else f"FAIL — gap: {result['gap']}"

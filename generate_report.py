@@ -55,9 +55,10 @@ _HTML = """\
     td    {{ padding: 10px 14px; border-bottom: 1px solid #ddd; vertical-align: top; }}
     tr:hover > td {{ background: #f9f9f9; }}
 
-    .badge {{ display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: .85em; font-weight: bold; }}
-    .pass  {{ background: #d5f5e3; color: #1e8449; }}
-    .fail  {{ background: #fdecea; color: #c0392b; }}
+    .badge   {{ display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: .85em; font-weight: bold; }}
+    .pass    {{ background: #d5f5e3; color: #1e8449; }}
+    .fail    {{ background: #fdecea; color: #c0392b; }}
+    .evaded  {{ background: #fef3cd; color: #7d4e00; }}
     .etag  {{ background: #eaf2ff; color: #1a5276; border-radius: 4px; padding: 2px 6px; font-size: .8em; margin-right: 3px; display: inline-block; }}
     .gtag  {{ background: #fdecea; color: #c0392b; border-radius: 4px; padding: 2px 6px; font-size: .8em; margin-right: 3px; display: inline-block; }}
     .none  {{ color: #aaa; }}
@@ -224,17 +225,31 @@ def _baseline_badge(r: dict) -> str:
 
 
 def _row(r: dict) -> str:
-    ok       = r.get("passed", False)
+    ok      = r.get("passed", False)
+    is_ev   = r.get("evasion_test", False)
+    evaded  = is_ev and not ok      # evasion test + gap = 預期成功的規避
     keywords = r.get("keywords", [])
     matched  = r.get("matched_events", [])
+
+    if evaded:
+        cls, label = "evaded", "EVADED ✓"
+    elif ok:
+        cls, label = "pass",   "PASS ✓"
+    else:
+        cls, label = "fail",   "FAIL"
+
+    name = r.get("technique_name", "")
+    if is_ev:
+        name += " (evasion)"
+
     return _ROW.format(
         tid            = _html.escape(r.get("technique_id", "")),
-        name           = _html.escape(r.get("technique_name", "")),
+        name           = _html.escape(name),
         expected       = _etags(r.get("expected_event_ids", [])),
         detected       = _etags(r.get("detected_event_ids", [])),
         gap            = _gtags(r.get("gap", [])),
-        cls            = "pass" if ok else "fail",
-        label          = "PASS ✓" if ok else "FAIL",
+        cls            = cls,
+        label          = label,
         baseline_badge = _baseline_badge(r),
         details        = _format_matched_events(matched, keywords),
         ts             = _html.escape(r.get("timestamp", "")),

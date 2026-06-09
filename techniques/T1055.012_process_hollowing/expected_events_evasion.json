@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1055.012",
+  "mitre_name": "Process Hollowing (Evasion: No NtUnmapViewOfSection)",
+  "expected_event_ids": [10, 25],
+  "keywords": ["T1055012_HOLLOW_EVASION", "GrantedAccess"],
+  "notes": "Evasion variant: 跳過 NtUnmapViewOfSection，改以 WriteProcessMemory 直接覆寫目標映像內容。Event 25 (ProcessTampering) 由 NtUnmapViewOfSection 觸發，跳過後不再產生。gap=[25] 為預期行為，確認 sysmon-modular 對此變體存在偵測缺口。Event 10 仍因 OpenProcess(PROCESS_ALL_ACCESS) 觸發。"
+}
