@@ -84,6 +84,14 @@ _HTML = """\
     .evbox tr.hit td       {{ background: #fffbea; }}
     .evbox tr.hit td.fname {{ background: #fef3cd; color: #7d4e00; font-weight: bold; }}
     mark {{ background: #ffe066; padding: 0 2px; border-radius: 2px; font-weight: bold; color: #000; }}
+
+    /* ── Baseline noise 指示器 ── */
+    .bl-ok   {{ display: block; margin-top: 4px; font-size: .75em; color: #1e8449; }}
+    .bl-ok::before {{ content: "▸ "; }}
+    .bl-warn {{ display: block; margin-top: 4px; font-size: .75em;
+                color: #7d4e00; background: #fef3cd;
+                border-radius: 4px; padding: 1px 6px; }}
+    .bl-warn::before {{ content: "⚠ "; }}
   </style>
 </head>
 <body>
@@ -138,7 +146,7 @@ _ROW = """\
         <td>{expected}</td>
         <td>{detected}</td>
         <td>{gap}</td>
-        <td><span class="badge {cls}">{label}</span></td>
+        <td><span class="badge {cls}">{label}</span>{baseline_badge}</td>
         <td class="detail-col">{details}</td>
         <td><small>{ts}</small></td>
       </tr>"""
@@ -204,20 +212,32 @@ def _format_matched_events(matched: list[dict], keywords: list[str]) -> str:
     return f'<details><summary>{summary}</summary>{"".join(blocks)}</details>'
 
 
+def _baseline_badge(r: dict) -> str:
+    """baseline_noise 欄位對應的小型指示器"""
+    if "baseline_noise" not in r:
+        return ""
+    if r["baseline_noise"]:
+        n    = r.get("baseline_hit_count", "?")
+        eids = r.get("baseline_hit_eids", [])
+        return f'<span class="bl-warn">baseline noise ×{n} (EventID {eids})</span>'
+    return '<span class="bl-ok">baseline clean</span>'
+
+
 def _row(r: dict) -> str:
     ok       = r.get("passed", False)
     keywords = r.get("keywords", [])
     matched  = r.get("matched_events", [])
     return _ROW.format(
-        tid     = _html.escape(r.get("technique_id", "")),
-        name    = _html.escape(r.get("technique_name", "")),
-        expected = _etags(r.get("expected_event_ids", [])),
-        detected = _etags(r.get("detected_event_ids", [])),
-        gap      = _gtags(r.get("gap", [])),
-        cls      = "pass" if ok else "fail",
-        label    = "PASS ✓" if ok else "FAIL",
-        details  = _format_matched_events(matched, keywords),
-        ts       = _html.escape(r.get("timestamp", "")),
+        tid            = _html.escape(r.get("technique_id", "")),
+        name           = _html.escape(r.get("technique_name", "")),
+        expected       = _etags(r.get("expected_event_ids", [])),
+        detected       = _etags(r.get("detected_event_ids", [])),
+        gap            = _gtags(r.get("gap", [])),
+        cls            = "pass" if ok else "fail",
+        label          = "PASS ✓" if ok else "FAIL",
+        baseline_badge = _baseline_badge(r),
+        details        = _format_matched_events(matched, keywords),
+        ts             = _html.escape(r.get("timestamp", "")),
     )
 
 

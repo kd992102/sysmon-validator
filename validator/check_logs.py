@@ -17,9 +17,10 @@ from pathlib import Path
 
 import win32evtlog
 
-SYSMON_CHANNEL  = "Microsoft-Windows-Sysmon/Operational"
-LOOK_AHEAD_SECS = 60    # 延長至 60 秒，避免 Sysmon 非同步寫入延遲
+SYSMON_CHANNEL    = "Microsoft-Windows-Sysmon/Operational"
+LOOK_AHEAD_SECS   = 60  # 延長至 60 秒，避免 Sysmon 非同步寫入延遲
 START_BUFFER_SECS = 5   # exec_ts 前後各加緩衝，防止時鐘微偏
+BASELINE_SECS     = 30  # exec_ts 前 30 秒作為 false-positive 基準視窗
 
 
 def _find_root() -> Path:
@@ -281,6 +282,45 @@ def _extract_event_fields(
     }
 
 
+# ── False-positive baseline check ────────────────────────────────────────────
+
+def check_baseline(expected: dict, exec_ts: datetime.datetime) -> dict:
+    """
+    查詢 exec_ts 前 BASELINE_SECS 秒是否已有符合條件的事件。
+
+    若有命中，代表偵測視窗可能受背景雜訊汙染，PASS 結果的可信度下降。
+    這對應軟體測試中的 false positive 評估：在 SUT 尚未受到刺激前，
+    test oracle 就已經回傳 "true" 的情況。
+    """
+    start = exec_ts - datetime.timedelta(seconds=BASELINE_SECS)
+    end   = exec_ts
+
+    id_clause = " or ".join(f"EventID={eid}" for eid in expected["expected_event_ids"])
+    s = start.strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
+    e = end.strftime(  "%Y-%m-%dT%H:%M:%S.9999999Z")
+    xpath = f"*[System[({id_clause}) and TimeCreated[@SystemTime>='{s}' and @SystemTime<='{e}']]]"
+
+    xmls  = query_events(xpath)
+    eids  = sorted({extract_event_id(x) for x in xmls} - {None})
+    noise = len(xmls) > 0
+
+    if noise:
+        print(
+            f"[!] Baseline noise: 執行前 {BASELINE_SECS}s 已有 {len(xmls)} 筆"
+            f" EventID={eids}，PASS 結果可信度下降",
+            file=sys.stderr,
+        )
+    else:
+        print(f"[*] Baseline clean（前 {BASELINE_SECS}s 無背景雜訊）", file=sys.stderr)
+
+    return {
+        "baseline_noise":       noise,
+        "baseline_hit_count":   len(xmls),
+        "baseline_hit_eids":    eids,
+        "baseline_window_secs": BASELINE_SECS,
+    }
+
+
 # ── 核心比對邏輯 ──────────────────────────────────────────────────────────────
 
 def validate(
@@ -408,6 +448,9 @@ def main() -> None:
     print(f"[debug] Sysmon 最新 3 筆事件：",                                      file=sys.stderr)
     debug_recent_events(3)
 
+    # ── false-positive baseline check：exec_ts 前 BASELINE_SECS 秒是否已有命中 ──
+    baseline = check_baseline(expected, start)
+
     event_xmls = query_events(xpath)
 
     print(
@@ -418,8 +461,11 @@ def main() -> None:
 
     result = validate(expected, event_xmls, args.child_pid, args.technique_pid)
     result["timestamp"] = args.timestamp
+    result.update(baseline)
 
     status = "PASS ✓" if result["passed"] else f"FAIL — gap: {result['gap']}"
+    if result["baseline_noise"]:
+        status += f"  ⚠ baseline noise ×{result['baseline_hit_count']}"
     print(f"[{'+'if result['passed'] else '-'}] {status}", file=sys.stderr)
 
     print(json.dumps(result, indent=2, ensure_ascii=False))
