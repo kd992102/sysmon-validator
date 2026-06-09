@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1218.011",
+  "mitre_name": "Signed Binary Proxy Execution: Rundll32",
+  "expected_event_ids": [1],
+  "keywords": ["T1218011_RUNDLL32_TEST", "rundll32"],
+  "notes": "Event 1：rundll32.exe 以 advpack.dll,RegisterOCX 啟動，CommandLine 含 T1218011_RUNDLL32_TEST。validator 以 child_pid 精確比對 ProcessId 欄位。Event 7（advpack.dll ImageLoad）因 sysmon-modular 預設過濾 System32 簽名 DLL 而不列入 expected。"
+}

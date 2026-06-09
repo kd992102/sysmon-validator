@@ -132,7 +132,7 @@ git commit -m "feat(T1234.001): add <technique name> technique and expected even
 
 1. T1134.004 — Parent PID Spoofing ✅ PASS（完成）
 2. T1055.012 — Process Hollowing ✅ PASS（完成，Event 10 + 25 均命中）
-3. T1218.011 — Rundll32（LOLBin）
+3. T1218.011 — Rundll32（LOLBin）✅ PASS（完成，Event 1 命中）
 4. T1059.001 — PowerShell 反射式執行
 
 ---
