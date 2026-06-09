@@ -123,7 +123,7 @@ def query_events(xpath: str) -> list[str]:
     try:
         hq = win32evtlog.EvtQuery(
             SYSMON_CHANNEL,
-            EVT_QUERY_CHANNEL_PATH | EVT_QUERY_FORWARD,
+            EVT_QUERY_CHANNEL_PATH | EVT_QUERY_REVERSE,  # 從最新往舊掃，避免大型 log 正向掃描 timeout
             xpath,
         )
     except Exception as e:
@@ -215,33 +215,145 @@ def extract_event_id(xml: str) -> int | None:
         return None
 
 
+def extract_field(xml: str, field_name: str) -> str | None:
+    """從 Sysmon 事件 XML 取出特定 EventData/Data 欄位值（相容單引號與雙引號屬性）"""
+    for q in ('"', "'"):
+        marker = f"Name={q}{field_name}{q}>"
+        idx = xml.find(marker)
+        if idx != -1:
+            start = idx + len(marker)
+            end   = xml.find("<", start)
+            if end != -1:
+                return xml[start:end].strip()
+    return None
+
+
+# 各 Event ID 要擷取的關鍵欄位（供報表顯示用）
+_KEY_FIELDS: dict[int, list[str]] = {
+    1:  ["UtcTime", "ProcessId", "Image", "CommandLine",
+         "ParentProcessId", "ParentImage", "User"],
+    8:  ["UtcTime", "SourceProcessId", "SourceImage",
+         "TargetProcessId", "TargetImage", "StartAddress"],
+    10: ["UtcTime", "SourceProcessId", "SourceImage",
+         "TargetProcessId", "TargetImage", "GrantedAccess"],
+    25: ["UtcTime", "ProcessId", "Image", "Type", "User"],
+}
+
+# 各 Event ID 中無論如何都要高亮的鑑識關鍵欄位
+_FORENSIC_HIGHLIGHT: dict[int, set[str]] = {
+    1:  {"ParentImage", "ParentProcessId"},
+    8:  {"TargetImage", "StartAddress"},
+    10: {"GrantedAccess", "TargetImage"},
+    25: {"Image", "Type"},
+}
+
+
+def _extract_event_fields(
+    xml: str,
+    eid: int,
+    keywords: list[str],
+    child_pid: int | None,
+    technique_pid: int | None,
+) -> dict:
+    """從 XML 取出關鍵欄位並標記命中原因，供報表高亮顯示"""
+    fields: dict[str, str] = {}
+    hit_fields: set[str] = set()
+
+    for name in _KEY_FIELDS.get(eid, []):
+        value = extract_field(xml, name)
+        if value is None:
+            continue
+        fields[name] = value
+        if any(kw in value for kw in keywords):
+            hit_fields.add(name)
+        if name == "ProcessId" and child_pid is not None and value == str(child_pid):
+            hit_fields.add(name)
+        if name == "SourceProcessId" and technique_pid is not None and value == str(technique_pid):
+            hit_fields.add(name)
+
+    # 鑑識關鍵欄位：無論 match 原因為何都高亮
+    hit_fields |= _FORENSIC_HIGHLIGHT.get(eid, set()) & fields.keys()
+
+    return {
+        "event_id":   eid,
+        "fields":     fields,
+        "hit_fields": sorted(hit_fields),
+    }
+
+
 # ── 核心比對邏輯 ──────────────────────────────────────────────────────────────
 
 def validate(
     expected: dict,
     event_xmls: list[str],
     child_pid: int | None,
+    technique_pid: int | None = None,
 ) -> dict:
     """
-    比對規則（與 CLAUDE.md 一致）：
+    比對規則：
       event_id 在 expected_event_ids 內
-      AND（至少一個 keyword 出現在 XML 裡 OR child_pid 出現在 XML 裡）
+      AND 以下任一條件成立：
+        - keyword 出現在 XML 裡
+        - Event 1：ProcessId == child_pid
+        - Event 10：SourceProcessId == technique_pid（精確比對，防止背景雜訊誤判）
+        - Event 25：ProcessId == child_pid（ProcessTampering 目標為 child process）
     """
-    expected_ids = set(expected["expected_event_ids"])
-    keywords     = expected.get("keywords", [])
-    detected_ids: set[int] = set()
+    expected_ids   = set(expected["expected_event_ids"])
+    keywords       = expected.get("keywords", [])
+    detected_ids: set[int]      = set()
+    matched_by_eid: dict[int, dict] = {}   # 每個 event_id 只保留一筆，優先 PID 精確命中
 
     for xml in event_xmls:
         eid = extract_event_id(xml)
         if eid not in expected_ids:
             continue
 
-        keyword_hit  = any(kw in xml for kw in keywords)
-        # child_pid 備援：Event 1 的 ProcessId 欄位
-        pid_hit      = child_pid is not None and str(child_pid) in xml
+        keyword_hit = any(kw in xml for kw in keywords)
 
-        if keyword_hit or pid_hit:
+        # Event 1：ProcessId 欄位精確比對 child_pid
+        event1_hit = (
+            eid == 1
+            and child_pid is not None
+            and extract_field(xml, "ProcessId") == str(child_pid)
+        )
+
+        # Event 10：SourceProcessId 欄位精確比對 technique_pid
+        event10_hit = (
+            eid == 10
+            and technique_pid is not None
+            and extract_field(xml, "SourceProcessId") == str(technique_pid)
+        )
+
+        # Event 25：ProcessId 欄位精確比對 child_pid（被 hollow 的目標 process）
+        event25_hit = (
+            eid == 25
+            and child_pid is not None
+            and extract_field(xml, "ProcessId") == str(child_pid)
+        )
+
+        if keyword_hit or event1_hit or event10_hit or event25_hit:
             detected_ids.add(eid)
+            is_precise = event1_hit or event10_hit or event25_hit
+            # 尚無記錄 → 存入；已有 keyword 命中但現在是精確命中 → 覆蓋
+            if eid not in matched_by_eid or is_precise:
+                matched_by_eid[eid] = _extract_event_fields(
+                    xml, eid, keywords, child_pid, technique_pid
+                )
+
+    matched_events = list(matched_by_eid.values())
+
+    # Debug：若 Event 1 預期但未命中，印出查詢結果中 Event 1 的狀況
+    if 1 in expected_ids and 1 not in detected_ids:
+        ev1_xmls = [x for x in event_xmls if extract_event_id(x) == 1]
+        print(f"  [debug] Event 1 在查詢結果中共 {len(ev1_xmls)} 筆", file=sys.stderr)
+        for x in ev1_xmls:
+            pid_val  = extract_field(x, "ProcessId")
+            kw_hits  = [kw for kw in keywords if kw in x]
+            print(
+                f"  [debug] Event 1: ProcessId={pid_val!r}  "
+                f"child_pid={child_pid}  kw_hits={kw_hits}",
+                file=sys.stderr,
+            )
 
     gap    = sorted(expected_ids - detected_ids)
     passed = len(gap) == 0
@@ -253,6 +365,8 @@ def validate(
         "detected_event_ids": sorted(detected_ids),
         "passed":             passed,
         "gap":                gap,
+        "matched_events":     matched_events,
+        "keywords":           keywords,
     }
 
 
@@ -260,11 +374,13 @@ def validate(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sysmon 事件驗測工具")
-    parser.add_argument("--technique",  required=True,
+    parser.add_argument("--technique",     required=True,
                         help="MITRE ATT&CK ID，例如 T1134.004")
-    parser.add_argument("--child-pid",  type=int, default=None,
-                        help="technique 建立的子 process PID（備援比對用）")
-    parser.add_argument("--timestamp",  required=True,
+    parser.add_argument("--child-pid",     type=int, default=None,
+                        help="technique 建立的子 process PID，用於 Event 1 精確比對")
+    parser.add_argument("--technique-pid", type=int, default=None,
+                        help="technique 本身的 PID，用於 Event 10 SourceProcessId 精確比對")
+    parser.add_argument("--timestamp",     required=True,
                         help="technique 開始執行的時間（ISO 8601 UTC）")
     args = parser.parse_args()
 
@@ -300,7 +416,7 @@ def main() -> None:
         file=sys.stderr,
     )
 
-    result = validate(expected, event_xmls, args.child_pid)
+    result = validate(expected, event_xmls, args.child_pid, args.technique_pid)
     result["timestamp"] = args.timestamp
 
     status = "PASS ✓" if result["passed"] else f"FAIL — gap: {result['gap']}"

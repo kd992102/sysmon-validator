@@ -16,6 +16,7 @@ import ctypes
 import ctypes.wintypes
 import datetime
 import json
+import os
 import subprocess
 import sys
 import time
@@ -321,10 +322,11 @@ def main() -> None:
     print(f"[+] Sysmon Event 10 → 本 process 對 {spoofed_name} 的 GrantedAccess 0x80")
 
     output = {
-        "technique_id": "T1134.004",
-        "executed":     True,
-        "timestamp":    exec_ts,
-        "details":      result,
+        "technique_id":  "T1134.004",
+        "executed":      True,
+        "timestamp":     exec_ts,
+        "technique_pid": os.getpid(),
+        "details":       result,
     }
     print(json.dumps(output, indent=2, ensure_ascii=False))
 
@@ -346,9 +348,10 @@ def main() -> None:
     subprocess.run(
         [
             sys.executable, str(validator),
-            "--technique", "T1134.004",
-            "--child-pid", str(result["child_pid"]),
-            "--timestamp", exec_ts,
+            "--technique",     "T1134.004",
+            "--child-pid",     str(result["child_pid"]),
+            "--technique-pid", str(os.getpid()),
+            "--timestamp",     exec_ts,
         ],
         check=False,
     )

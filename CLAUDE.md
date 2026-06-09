@@ -24,8 +24,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 執行單一 technique（需 Admin）
 python techniques/TXXXX_name/technique.py
 
-# 執行所有 technique 並產生報表
+# 執行所有 technique 並產生 report.json
 python run_all.py
+
+# 將 report.json 轉換為 HTML 覆蓋率報表
+python generate_report.py
 
 # 驗測特定 technique 的 Sysmon 事件
 python validator/check_logs.py --technique T1134.004
@@ -55,6 +58,18 @@ python validator/check_logs.py --technique T1134.004
 - 禁止硬編碼路徑，使用 `pathlib.Path`
 - 每個步驟必須有**繁體中文**註解說明目的
 - 執行前檢查 Admin 權限，沒有則提示並退出
+
+---
+
+## Technique 資料夾標準結構
+
+每個 technique 資料夾需包含：
+
+| 檔案 | 說明 |
+|------|------|
+| `technique.py` | 攻擊模擬主腳本（必要） |
+| `expected_events.json` | 預期事件定義與驗測結果 |
+| `remediation.md` | 記錄 sysmon-modular config 的缺口與補丁規則（有缺口才建立） |
 
 ---
 
@@ -115,8 +130,8 @@ git commit -m "feat(T1234.001): add <technique name> technique and expected even
 
 ## 當前優先順序
 
-1. T1134.004 — Parent PID Spoofing（進行中）
-2. T1055.012 — Process Hollowing
+1. T1134.004 — Parent PID Spoofing ✅ PASS（完成）
+2. T1055.012 — Process Hollowing ✅ PASS（完成，Event 10 + 25 均命中）
 3. T1218.011 — Rundll32（LOLBin）
 4. T1059.001 — PowerShell 反射式執行
 

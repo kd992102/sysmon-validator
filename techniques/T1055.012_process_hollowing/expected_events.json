@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1055.012",
+  "mitre_name": "Process Hollowing",
+  "expected_event_ids": [10, 25],
+  "keywords": ["T1055012_HOLLOW_TEST", "GrantedAccess"],
+  "notes": "Event 10：OpenProcess(PROCESS_ALL_ACCESS=0x1F0FFF)，sysmon-modular 預設 config 涵蓋。Event 25：ProcessTampering（Sysmon v13+），NtUnmapViewOfSection 觸發，是偵測 Process Hollowing 最直接的指標，不依賴 keyword 而是以 child_pid 精確比對 ProcessId。注意：Event 1 因 sysmon-modular 預設 config 過濾 notepad.exe ProcessCreate 而未出現（詳見 remediation.md）。標準 Process Hollowing 使用 SetThreadContext 而非 CreateRemoteThread，故不觸發 Event 8。"
+}
