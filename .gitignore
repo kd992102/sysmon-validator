@@ -37,6 +37,7 @@ package.json
 package-lock.json
 
 # Slides & reports (generated / Marp)
+generate_slides_assets.py
 slides_assets/
 slides.md
 progress_report.md
