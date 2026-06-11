@@ -1,0 +1,7 @@
+{
+  "technique_id": "T1053.005",
+  "mitre_name": "Scheduled Task/Job: Scheduled Task (Evasion: COM API)",
+  "expected_event_ids": [1],
+  "keywords": ["T1053005_COM_EVASION"],
+  "notes": "Evasion variant: 改用 Windows Task Scheduler COM API（Schedule.Service / taskschd.dll）建立排程工作，操作在目前 process 的 address space 內完成，不產生 schtasks.exe 子 process。sysmon-modular 的 T1053.005 偵測依賴 schtasks.exe ProcessCreate（Event 1），COM API 路徑完全繞過此偵測層。預期結果：gap=[1]，代表 sysmon-modular 的 Scheduled Task 偵測規則被此手法規避。"
+}

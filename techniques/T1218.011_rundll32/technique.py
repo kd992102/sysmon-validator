@@ -43,8 +43,8 @@ def run_rundll32_lolbin() -> dict:
     """
     以 rundll32.exe advpack.dll,RegisterOCX <MARKER> 觸發 LOLBin 代理執行。
 
-    RegisterOCX 嘗試將 MARKER 字串解讀為 OCX 路徑並載入，找不到檔案後靜默失敗；
-    rundll32 process 的建立動作仍被 Sysmon 完整記錄。
+    Process 建立後立即以 kill() 終止：Sysmon Event 1 由 kernel callback 在建立瞬間觸發，
+    early kill 不影響事件記錄，但可阻止 RegisterOCX 執行到 MessageBox 呼叫。
 
     觸發的 Sysmon 事件：
       Event 1：rundll32.exe ProcessCreate，CommandLine 含 T1218011_RUNDLL32_TEST
@@ -61,13 +61,12 @@ def run_rundll32_lolbin() -> dict:
     child_pid = proc.pid
     print(f"  [*] rundll32.exe 啟動，PID: {child_pid}", file=sys.stderr)
 
-    # 步驟 2：等待 rundll32 退出（RegisterOCX 找不到標記路徑後迅速結束）
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        # 逾時則強制終止，確保不留殘留 process
-        proc.kill()
-        proc.wait()
+    # 步驟 2：立即終止 rundll32
+    # Sysmon Event 1 由 PsSetCreateProcessNotifyRoutineEx kernel callback 在 process
+    # 建立瞬間觸發，早於任何 user-mode 程式碼執行。因此立刻 kill() 仍可確保 Event 1 被記錄，
+    # 同時避免 advpack.dll,RegisterOCX 在 LoadLibrary 失敗後呼叫 MessageBox。
+    proc.kill()
+    proc.wait()
 
     return {
         "child_pid": child_pid,

@@ -30,3 +30,16 @@ Desktop.ini
 # Secrets / env
 .env
 *.env
+
+# Node / Marp
+node_modules/
+package.json
+package-lock.json
+
+# Slides & reports (generated / Marp)
+slides_assets/
+slides.md
+progress_report.md
+513558001_*.md
+513558001_*.pdf
+*.pdf
